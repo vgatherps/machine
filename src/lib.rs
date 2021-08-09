@@ -501,6 +501,22 @@ fn impl_machine(m: &Machine) -> (&Ident, proc_macro2::TokenStream) {
         stream.extend(proc_macro2::TokenStream::from(toks));
     }
 
+    let conversions = &ast
+        .variants
+        .iter()
+        .map(|variant| {
+            let struct_name = &variant.ident;
+
+            quote! {
+                impl std::convert::From<#struct_name> for #machine_name {
+                    fn from(item: #struct_name) -> Self {
+                        #machine_name :: #struct_name(item)
+                    }
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
     let methods = &ast
         .variants
         .iter()
@@ -527,10 +543,10 @@ fn impl_machine(m: &Machine) -> (&Ident, proc_macro2::TokenStream) {
             let arg_names = &variant.fields.iter().map(|f| &f.ident).collect::<Vec<_>>();
 
             quote! {
-              pub fn #fn_name(#(#args),*) -> #machine_name {
-                #machine_name::#struct_name(#struct_name {
+              pub fn #fn_name(#(#args),*) -> #struct_name {
+                #struct_name {
                   #(#arg_names),*
-                })
+                }
               }
             }
         })
@@ -544,6 +560,7 @@ fn impl_machine(m: &Machine) -> (&Ident, proc_macro2::TokenStream) {
           #machine_name::Error
         }
       }
+      #(#conversions)*
     };
 
     stream.extend(proc_macro2::TokenStream::from(toks));
@@ -557,11 +574,26 @@ struct Transitions {
     pub transitions: Vec<Transition>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Transition {
     pub start: Ident,
     pub message: Type,
     pub end: Vec<Ident>,
+}
+
+fn get_state_name(start: &Ident, message: &Type) -> Ident {
+    let test = match message.clone() {
+        Type::Path(p) => p,
+        _ => panic!("Cannot handle a non-path state name"),
+    };
+    if test.qself.is_some() {
+        panic!("Can't handle state type name of associated type");
+    }
+    if let Some(id) = test.path.get_ident() {
+        Ident::new(&format!("{}On{}", start, id), start.span())
+    } else {
+        panic!("Cannot convert path {:?} into ident", test.path);
+    }
 }
 
 impl Parse for Transitions {
@@ -737,24 +769,86 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
       }
     };
 
+    // Define the structs for each transition
+
     stream.extend(proc_macro2::TokenStream::from(toks));
+
+    let message_returns: Vec<_> = transitions
+        .transitions
+        .iter()
+        .map(|t| {
+            if t.end.len() <= 1 {
+                quote! {}
+            } else {
+                // TODO make this work properly for generics
+                let name = get_state_name(&t.start, &t.message);
+                let enums: Vec<_> = t
+                    .end
+                    .iter()
+                    .map(|e| {
+                        quote! {
+                            #e(#e)
+                        }
+                    })
+                    .collect();
+                let from_impls = t.end.iter().map(|e| {
+                    quote! {
+                        impl std::convert::From<#e> for #name {
+                            fn from(item: #e) -> Self {
+                                #name :: #e(item)
+                            }
+                        }
+                    }
+                });
+                let convert_to_main_lines = t.end.iter().map(|e| {
+                    quote! {
+                        #name :: #e(val) => #machine_name :: #e(val)
+                    }
+                });
+                // TODO finally have to make this work for the conversion
+                // of the sub-enum into the mega-enum
+                quote! {
+                    pub enum #name {
+                        #(#enums),*
+                    }
+                    impl std::convert::From<#name> for #machine_name {
+                        fn from(item: #name) -> Self {
+                            match item {
+                            #(#convert_to_main_lines),*
+                            }
+                        }
+                    }
+                    #(#from_impls)*
+
+                }
+            }
+        })
+        .collect();
+
+    let return_enums = quote! {#(#message_returns)*};
+    stream.extend(proc_macro2::TokenStream::from(return_enums));
+
     let functions = messages
         .iter()
         .map(|(msg, moves)| {
             let fn_ident = Ident::new(
-                //&format!("on_{}", &msg.to_string().to_snake()),
                 &format!("on_{}", type_to_snake(msg)),
                 proc_macro2::Span::call_site(),
             );
             let mv = moves.iter().map(|(start, end)| {
-          if end.len() == 1 {
+          if end.len() <= 1 {
             let end_state = &end[0];
             quote!{
               #machine_name::#start(state) => #machine_name::#end_state(state.#fn_ident(input)),
             }
           } else {
+              // Build enum of representable states
+            let state_return_name = get_state_name(start, msg);
             quote!{
-              #machine_name::#start(state) => state.#fn_ident(input),
+              #machine_name::#start(state) => {
+                  let rval: #state_return_name = state.#fn_ident(input);
+                  rval.into()
+              }
             }
           }
         }).collect::<Vec<_>>();
@@ -823,7 +917,6 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     stream.extend(proc_macro2::TokenStream::from(toks));
 
-    //println!("generated: {:?}", gen);
     trace!("generated transitions: {}", stream);
     let _ = create_dir("target/machine");
     let file_name = format!(

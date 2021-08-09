@@ -80,77 +80,75 @@ methods!(HttpRequest,
 );
 
 impl Initial {
-  pub fn on_request_line(self, request: RequestLine) -> HasRequestLine {
-    HasRequestLine { request }
-  }
+    pub fn on_request_line(self, request: RequestLine) -> HasRequestLine {
+        HasRequestLine { request }
+    }
 }
 
 impl HasRequestLine {
-  pub fn on_host_header(self, h: HostHeader) -> HasHost {
-    let HostHeader(host) = h;
+    pub fn on_host_header(self, h: HostHeader) -> HasHost {
+        let HostHeader(host) = h;
 
-    HasHost {
-      request: self.request,
-      host,
+        HasHost {
+            request: self.request,
+            host,
+        }
     }
-  }
 
-  pub fn on_length_header(self, h: LengthHeader) -> HasLength {
-    let LengthHeader(length) = h;
+    pub fn on_length_header(self, h: LengthHeader) -> HasLength {
+        let LengthHeader(length) = h;
 
-    HasLength {
-      request: self.request,
-      length,
+        HasLength {
+            request: self.request,
+            length,
+        }
     }
-  }
 }
 
 impl HasHost {
-  pub fn on_length_header(self, h: LengthHeader) -> HasHostAndLength {
-    let LengthHeader(length) = h;
+    pub fn on_length_header(self, h: LengthHeader) -> HasHostAndLength {
+        let LengthHeader(length) = h;
 
-    HasHostAndLength {
-      request: self.request,
-      host: self.host,
-      length,
+        HasHostAndLength {
+            request: self.request,
+            host: self.host,
+            length,
+        }
     }
-  }
 
-  pub fn on_header_end(self, _: HeaderEnd) -> Request {
-    Request {
-      request: self.request,
-      host: self.host,
+    pub fn on_header_end(self, _: HeaderEnd) -> Request {
+        Request {
+            request: self.request,
+            host: self.host,
+        }
     }
-  }
 }
 
 impl HasLength {
-  pub fn on_host_header(self, h: HostHeader) -> HasHostAndLength {
-    let HostHeader(host) = h;
+    pub fn on_host_header(self, h: HostHeader) -> HasHostAndLength {
+        let HostHeader(host) = h;
 
-    HasHostAndLength {
-      request: self.request,
-      length: self.length,
-      host,
+        HasHostAndLength {
+            request: self.request,
+            length: self.length,
+            host,
+        }
     }
-  }
 }
 
 impl HasHostAndLength {
-  pub fn on_header_end(self, _: HeaderEnd) -> HttpRequest {
-    match self.length {
-      LengthInfo::Length(remaining) => HttpRequest::RequestWithBody(RequestWithBody {
-        request: self.request,
-        host: self.host,
-        remaining
-      }),
-      LengthInfo::Chunked => {
-        HttpRequest::RequestWithChunks(RequestWithChunks {
-          request: self.request,
-          host: self.host,
-          chunk: ChunkState,
-        })
-      }
+    pub fn on_header_end(self, _: HeaderEnd) -> HasHostAndLengthOnHeaderEnd {
+        match self.length {
+            LengthInfo::Length(remaining) => RequestWithBody {
+                request: self.request,
+                host: self.host,
+                remaining,
+            }.into(),
+            LengthInfo::Chunked => RequestWithChunks {
+                request: self.request,
+                host: self.host,
+                chunk: ChunkState,
+            }.into(),
+        }
     }
-  }
 }
