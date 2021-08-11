@@ -27,11 +27,11 @@ pub struct Toggle;
 
 transitions!(TrafficLight,
   [
-    (Green, prefix::Advance) => Orange,
+    (Green, prefix::Advance) == Orange,
     (Orange, prefix::Advance) => Red,
     (Red, prefix::Advance) => Green,
     (Green, PassCar) => [Green, Orange],
-    (Green, Toggle) => BlinkingOrange,
+    (Green, Toggle) == BlinkingOrange,
     (Orange, Toggle) => BlinkingOrange,
     (Red, Toggle) => BlinkingOrange,
     (BlinkingOrange, Toggle) => Red
@@ -47,10 +47,6 @@ methods!(TrafficLight,
 );
 
 impl Green {
-    pub fn on_advance(self, _: prefix::Advance) -> Orange {
-        Orange {}
-    }
-
     pub fn on_pass_car(self, input: PassCar) -> GreenOnPassCar {
         let count = self.count + input.count;
         if count >= 10 {
@@ -59,10 +55,6 @@ impl Green {
         } else {
             GreenOnPassCar::Green(Green { count: count })
         }
-    }
-
-    pub fn on_toggle(self, _: Toggle) -> BlinkingOrange {
-        BlinkingOrange {}
     }
 
     pub fn working(&self) -> bool {
