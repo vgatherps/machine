@@ -579,6 +579,7 @@ struct Transition {
     pub start: Ident,
     pub message: Type,
     pub end: Vec<Ident>,
+    pub is_default: bool,
 }
 
 fn get_state_name(start: &Ident, message: &Type) -> Ident {
@@ -637,7 +638,13 @@ impl Parse for Transition {
         let _: Token![,] = left.parse()?;
         let message: Type = left.parse()?;
 
-        let _: Token![=>] = input.parse()?;
+        let mut is_default = false;
+        let is_ok: Result<Token![==]> = input.parse();
+        if is_ok.is_ok() {
+            is_default = true;
+        } else {
+            let _: Token![=>] = input.parse()?;
+        };
 
         let end = match input.parse::<Ident>() {
             Ok(i) => vec![i],
@@ -670,6 +677,7 @@ impl Parse for Transition {
             start,
             message,
             end,
+            is_default,
         })
     }
 }
@@ -763,7 +771,6 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     // define the state enum
     let toks = quote! {
-      #[derive(Clone,Debug,PartialEq)]
       pub enum #message_enum_ident #type_arg_toks {
         #(#variants_names(#structs_names)),*
       }
@@ -828,6 +835,44 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let return_enums = quote! {#(#message_returns)*};
     stream.extend(proc_macro2::TokenStream::from(return_enums));
 
+    let default_impls: Vec<_> = transitions
+        .transitions
+        .iter()
+        .filter(|t| t.is_default)
+        .map(|t| {
+            if t.end.len() != 1 {
+                panic!("Can't default a transition with many end states: {:?}", t);
+            }
+            // TODO a lot of copy and paste here
+            let fn_ident = Ident::new(
+                &format!("on_{}", type_to_snake(&t.message)),
+                proc_macro2::Span::call_site(),
+            );
+            let type_arguments = reorder_type_arguments(type_args(&t.message));
+            let type_arg_toks = if type_arguments.is_empty() {
+                quote! {}
+            } else {
+                quote! {
+                  < #(#type_arguments),* >
+                }
+            };
+
+            let msg = &t.message;
+            let end = &t.end[0];
+            let start = &t.start;
+            quote! {
+                impl #start {
+                    pub fn #fn_ident #type_arg_toks(self, input: #msg) -> #end {
+                        #end {}
+                    }
+                }
+            }
+        })
+        .collect();
+
+    let toks = quote!{#(#default_impls)*};
+
+    stream.extend(proc_macro2::TokenStream::from(toks));
     let functions = messages
         .iter()
         .map(|(msg, moves)| {
