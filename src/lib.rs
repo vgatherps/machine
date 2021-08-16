@@ -10,8 +10,8 @@
 //! * transitions can have multiple end states if needed (conditions depending on message content, etc)
 //! * accessors can be generated for state members
 //! * wrapper methods and accessors are generated on the parent enum
-//! * the generated code is also written in the `target/machine` directory for further inspection
-//! * a dot file is written in the `target/machine` directory for graph generation
+//! * the generated code is also written in the `machine_writing/machine` directory for further inspection
+//! * a dot file is written in the `machine_writing/machine` directory for graph generation
 //!
 //! ## Usage
 //!
@@ -248,9 +248,9 @@
 //! }
 //! ```
 //!
-//! The complete generated code can be found in `target/machine/traffic.rs`.
+//! The complete generated code can be found in `machine_writing/machine/traffic.rs`.
 //!
-//! The machine crate will also generate the `target/machine/traffic.dot` file
+//! The machine crate will also generate the `machine_writing/machine/traffic.dot` file
 //! for graphviz usage:
 //!
 //! ```dot
@@ -263,7 +263,7 @@
 //! }
 //! ```
 //!
-//! `dot -Tpng target/machine/traffic.dot > traffic.png` will generate the following image:
+//! `dot -Tpng machine_writing/machine/traffic.dot > traffic.png` will generate the following image:
 //!
 //! ![traffic light transitions graph](https://raw.githubusercontent.com/rust-bakery/machine/master/assets/traffic.png)
 //!
@@ -439,8 +439,9 @@ pub fn machine(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     trace!("generated: {}", gen);
 
-    let file_name = format!("target/machine/{}.rs", name.to_string().to_lowercase());
-    let _ = create_dir("target/machine");
+    let file_name = format!("machine_writing/machine/{}.rs", name.to_string().to_lowercase());
+    let _ = create_dir("machine_writing");
+    let _ = create_dir("machine_writing/machine");
     File::create(&file_name)
         .and_then(|mut file| {
             file.seek(std::io::SeekFrom::End(0))?;
@@ -685,10 +686,10 @@ impl Parse for Transition {
 impl Transitions {
     pub fn render(&self) {
         let file_name = format!(
-            "target/machine/{}.dot",
+            "machine_writing/machine/{}.dot",
             self.machine_name.to_string().to_lowercase()
         );
-        let _ = create_dir("target/machine");
+        let _ = create_dir("machine_writing/machine");
         let mut file = File::create(&file_name).expect("error opening dot file");
 
         file.write_all(format!("digraph {} {{\n", self.machine_name.to_string()).as_bytes())
@@ -963,9 +964,10 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     stream.extend(proc_macro2::TokenStream::from(toks));
 
     trace!("generated transitions: {}", stream);
-    let _ = create_dir("target/machine");
+    let _ = create_dir("machine_writing");
+    let _ = create_dir("machine_writing/machine");
     let file_name = format!(
-        "target/machine/{}.rs",
+        "machine_writing/machine/{}.rs",
         machine_name.to_string().to_lowercase()
     );
     OpenOptions::new()
@@ -984,7 +986,6 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
 #[proc_macro]
 pub fn methods(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    //println!("\ninput: {:?}", input);
     let input = proc_macro2::TokenStream::from(input);
 
     let mut stream = proc_macro::TokenStream::new();
@@ -1185,10 +1186,11 @@ pub fn methods(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     stream.extend(proc_macro::TokenStream::from(toks));
 
     let file_name = format!(
-        "target/machine/{}.rs",
+        "machine_writing/machine/{}.rs",
         machine_name.to_string().to_lowercase()
     );
-    let _ = create_dir("target/machine");
+    let _ = create_dir("machine_writing");
+    let _ = create_dir("machine_writing/machine");
     OpenOptions::new()
         .create(true)
         .write(true)
