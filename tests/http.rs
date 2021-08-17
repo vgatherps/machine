@@ -143,12 +143,14 @@ impl HasHostAndLength {
                 request: self.request,
                 host: self.host,
                 remaining,
-            }.into(),
+            }
+            .into(),
             LengthInfo::Chunked => RequestWithChunks {
                 request: self.request,
                 host: self.host,
                 chunk: ChunkState,
-            }.into(),
+            }
+            .into(),
         }
     }
 }

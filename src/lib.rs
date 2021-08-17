@@ -439,7 +439,10 @@ pub fn machine(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     trace!("generated: {}", gen);
 
-    let file_name = format!("machine_writing/machine/{}.rs", name.to_string().to_lowercase());
+    let file_name = format!(
+        "machine_writing/machine/{}.rs",
+        name.to_string().to_lowercase()
+    );
     let _ = create_dir("machine_writing");
     let _ = create_dir("machine_writing/machine");
     File::create(&file_name)
@@ -871,7 +874,7 @@ pub fn transitions(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         })
         .collect();
 
-    let toks = quote!{#(#default_impls)*};
+    let toks = quote! {#(#default_impls)*};
 
     stream.extend(proc_macro2::TokenStream::from(toks));
     let functions = messages
