@@ -1,5 +1,4 @@
 [package]
-
 name        = "machine"
 version     = "0.3.0"
 authors     = ["Geoffroy Couprie <contact@geoffroycouprie.com>"]
@@ -17,6 +16,7 @@ include = [
   "src/lib.rs",
   "tests/*.rs"
 ]
+
 [dependencies]
 syn = {version = "^1", features = ["full", "extra-traits", "parsing"] }
 quote = "^1"
